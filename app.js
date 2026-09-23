@@ -111,7 +111,7 @@ function parseTx(sig, t) {
   return { sig, slot: t.slot || 0, time: t.blockTime || 0, signer: keys[0], m, tr };
 }
 
-const S = { recs: new Map(), newest: null, bal: null, synced: false, syncing: false, err: null, dex: {}, dexAt: 0 };
+const S = { recs: new Map(), newest: null, bal: null, synced: false, syncing: false, err: null, dex: {}, dexAt: 0, syncedAt: 0 };
 const CK = 'bw:' + CFG.ESCROW;
 (function loadCache() {
   if (!CFG.ESCROW) return;
@@ -147,7 +147,7 @@ async function sync() {
       S.recs.set(s.signature, parseTx(s.signature, t) || { sig: s.signature, skip: true });
     });
     if (!errs.length && !missing && sigs.length) S.newest = sigs[0].signature;
-    S.synced = true; S.err = errs.length ? 'some transactions did not load, retrying' : null;
+    S.synced = true; S.syncedAt = Date.now(); S.err = errs.length ? 'some transactions did not load, retrying' : null;
     saveCache();
   } catch (e) {
     S.err = (e && e.message) || String(e);
@@ -445,6 +445,57 @@ function boardGrid() {
   return `<div class="grid g3">${list.map(coinCard).join('')}</div>`;
 }
 let boardQ = '', boardSort = 'newest', taskK = 'all', taskQ = '', taskSort = 'newest', lbWin = 'all', rcK = 'all';
+const ICON = {
+  raid: '<svg viewBox="0 0 24 24"><path d="M3 10v4h3l6 4V6L6 10H3zm13-2.5a5 5 0 0 1 0 9M18.5 5a8.5 8.5 0 0 1 0 14"/></svg>',
+  meme: '<svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="3"/><circle cx="9" cy="10" r="2"/><path d="M21 16l-5-5-8 9"/></svg>',
+  thread: '<svg viewBox="0 0 24 24"><circle cx="5" cy="6" r="2"/><circle cx="5" cy="18" r="2"/><path d="M5 8v8M10 6h10M10 12h10M10 18h7"/></svg>',
+  video: '<svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="3"/><path d="M10 9v6l5-3z"/></svg>'
+};
+function syncedTxt() {
+  if (!CFG.ESCROW) return 'opens with the CA';
+  if (S.syncedAt) return 'synced ' + ago(Math.floor(S.syncedAt / 1000));
+  return S.err ? 'retrying the chain…' : 'reading the chain…';
+}
+function pill() {
+  const el = $('#live-pill'); if (!el) return;
+  const st = !CFG.ESCROW ? 'off' : S.err && !S.synced ? 'bad' : S.synced ? 'on' : 'warn';
+  el.className = 'live-pill ' + st;
+  el.querySelector('b').textContent = st === 'on' ? 'live · ' + ago(Math.floor(S.syncedAt / 1000)) : st === 'bad' ? 'chain offline' : st === 'warn' ? 'syncing' : 'not live yet';
+}
+function escrowCard() {
+  if (!CFG.ESCROW) return '';
+  const bal = S.bal && S.synced ? sol(S.bal) : '<span class="dash" title="nothing yet — a dash is not a zero">—</span>';
+  return `<div class="escard"><div class="escard-top"><span class="dot${S.synced ? ' on' : ''}"></span><b>live escrow</b><span class="muted" data-synced>${esc(syncedTxt())}</span></div>
+    <div class="escard-bal">${bal} <small>SOL locked</small></div>
+    <div class="escard-row"><code>${esc(short(CFG.ESCROW))}</code><button class="btn btn-sm" data-act="copy" data-v="${esc(CFG.ESCROW)}">copy</button><a class="btn btn-sm" href="${acct(CFG.ESCROW)}" target="_blank" rel="noopener">solscan ↗</a></div></div>`;
+}
+function actRow(e) {
+  const [k, t, l] = evText(e);
+  return `<li><span class="ev ev-${esc(e.k)}">${esc(k)}</span><span>${esc(t)}</span><span class="muted">${ago(e.r.time)}</span>${l ? `<span class="amt">${sol(l)} SOL</span>` : '<span class="amt"></span>'}<a class="tx" href="${tx(e.r.sig)}" target="_blank" rel="noopener">tx ↗</a></li>`;
+}
+function checkProof(k, x, url) {
+  x = str(x, 16).replace(/^@/, ''); url = str(url, 200);
+  if (!url) return [null, 'paste a link to check it.'];
+  if (!TYPES[k]) return [false, 'pick a task type.'];
+  if (!/^[A-Za-z0-9_]{1,15}$/.test(x)) return [false, 'add your X handle, letters, numbers and _ only.'];
+  const xm = url.match(XRE);
+  if (k === 'video' ? !(xm || VRE.test(url)) : !xm) return [false, `that isn't ${TYPES[k].proof}.`];
+  if (xm && xm[1].toLowerCase() !== x.toLowerCase()) return [false, `that post is from @${xm[1]}, not @${x}. devs will reject it.`];
+  return [true, `looks right. this is the link format a ${k} proof needs, from @${x}.`];
+}
+function updateTools() {
+  const fc = document.getElementById('f-check'), fp = document.getElementById('f-plan');
+  if (fc) {
+    const [ok, msg] = checkProof(fc.elements.k.value, fc.elements.x.value, fc.elements.url.value);
+    const o = $('#check-out'); o.className = 'tool-out' + (ok === true ? ' good' : ok === false ? ' bad' : ''); o.textContent = (ok === true ? '✓ ' : ok === false ? '✗ ' : '') + msg;
+  }
+  if (fp) {
+    const rr = num(fp.elements.r.value), n = Math.floor(num(fp.elements.n.value)), m = Math.floor(num(fp.elements.m.value || '1'));
+    const o = $('#plan-out');
+    if (!(rr > 0) || !(n >= 1) || !(m >= 1)) { o.className = 'tool-out'; o.textContent = 'enter pay per slot and slots to see what to lock.'; }
+    else { const tot = Math.round(rr * LPS) * n * m; o.className = 'tool-out good'; o.innerHTML = `lock <b>${sol(tot)} SOL</b> for <b>${n * m}</b> paid slots. each approved proof pays <b>${sol(Math.round(rr * LPS))} SOL</b>, straight from escrow.`; }
+  }
+}
 
 /* ---------- pages ---------- */
 function home() {
@@ -462,7 +513,7 @@ function home() {
       <h1 class="title">bagwork</h1>
       <p class="lede">you've been doing bagwork for free. not anymore.</p>
       <p class="sub">devs lock SOL in escrow. you raid, meme, thread and clip. approved proof gets paid straight from escrow, and every payout is a tx anyone can open.</p>
-      <div class="chips">${caChip()}${d && d.mcap ? `<span class="chip"><b>mcap</b>${usd(d.mcap)} <span class="muted">· dexscreener</span></span>` : ''}</div>
+      ${escrowCard()}
       <div class="ctas">
         <a class="btn btn-mint" href="#/tasks">browse tasks</a>
         <a class="btn btn-or" href="#/devs">list your coin →</a>
@@ -486,20 +537,13 @@ function home() {
 
   <section class="sec"><div class="wrap">
     <div class="sec-h"><h2>the <span class="o">bagwork</span></h2><small>what devs pay for</small></div>
-    <div class="grid g4">${Object.entries(TYPES).map(([k, t]) => `<a class="card cat t-${k}" href="#/tasks?k=${k}"><h3>${esc(t.name)}</h3><p>${esc(t.does)}</p><div class="pf">proof: ${esc(t.proof)}</div><span class="n">${cnt(k)} open</span></a>`).join('')}</div>
-  </div></section>
-
-  <section class="sec"><div class="wrap grid g2">
-    <div><div class="sec-h"><h2>recent payouts</h2><small>on-chain receipts</small></div>
-      ${recent.length ? `<ul class="card feed">${recent.map(payRow).join('')}</ul>` : `<div class="empty">no payouts yet. the first one prints here.</div>`}</div>
-    <div><div class="sec-h"><h2>approved · <span class="o">unpaid</span></h2><small>the clock we can't hide</small></div>
-      ${up.length ? `<ul class="card feed">${up.slice(0, 8).map(unpaidRow).join('')}</ul>` : `<div class="empty">nothing waiting. approved work that isn't paid shows here with a running timer.</div>`}</div>
+    <div class="grid g4">${Object.entries(TYPES).map(([k, t]) => { const top = Math.max(0, ...[...D.tasks.values()].filter(x => x.k === k && !x.closed && left(x) > 0).map(x => x.r)); return `<a class="card cat t-${k}" href="#/tasks?k=${k}"><span class="ic">${ICON[k]}</span><h3>${esc(t.name)}</h3><p>${esc(t.does)}</p><div class="pf">proof: ${esc(t.proof)}</div><div class="cat-row"><span class="n">${cnt(k)} open</span><span class="tp">top pay ${top ? sol(top) + ' SOL' : '<span class="dash">—</span>'}</span></div></a>`; }).join('')}</div>
   </div></section>
 
   <section class="sec" id="how"><div class="wrap">
     <div class="card term pad">
       <div class="sec-h"><h2>how it works <span class="or">● escrow on-chain</span></h2></div>
-      <p class="dim">&gt; no promises, no DMs. the pool is locked before the task goes up, and every step is a transaction you can open.</p>
+      <div class="pipe"><span>dev</span><i>→</i><span class="p-or">escrow</span><i>→</i><span>task</span><i>→</i><span>you</span><i>→</i><span>proof</span><i>→</i><span class="p-mint">approve</span><i>→</i><span class="p-mint">SOL</span></div>
       <div class="grid g2">
         <div>
           <h3>i'm doing the work</h3>
@@ -522,6 +566,18 @@ function home() {
     </div>
   </div></section>
 
+  <section class="sec"><div class="wrap grid g2">
+    <div><div class="sec-h"><h2>recent payouts</h2><small>on-chain receipts</small></div>
+      ${recent.length ? `<ul class="card feed">${recent.map(payRow).join('')}</ul>` : `<div class="empty">no payouts yet. the first one prints here.</div>`}</div>
+    <div><div class="sec-h"><h2>approved · <span class="o">unpaid</span></h2><small>the clock we can't hide</small></div>
+      ${up.length ? `<ul class="card feed">${up.slice(0, 8).map(unpaidRow).join('')}</ul>` : `<div class="empty">nothing waiting. approved work that isn't paid shows here with a running timer.</div>`}</div>
+  </div></section>
+
+  <section class="sec"><div class="wrap">
+    <div class="sec-h"><h2>live <span class="o">activity</span></h2><a class="muted" href="#/receipts">all receipts →</a></div>
+    ${D.ev.length ? `<ul class="card feed act">${D.ev.slice(-10).reverse().map(actRow).join('')}</ul>` : (loadingNote() || '<div class="empty">nothing has happened on the board yet. every listing, task, proof and payout lands here with its tx.</div>')}
+  </div></section>
+
   <section class="sec" id="board"><div class="wrap">
     <div class="sec-h"><h2>the board</h2><small>live from the chain · refreshes every ${Math.round(CFG.REFRESH_MS / 1000)}s</small></div>
     <div class="tools"><label class="search"><span aria-hidden="true">⌕</span><input id="board-q" placeholder="look up a coin, ticker or CA…" value="${esc(boardQ)}" autocomplete="off"></label>
@@ -532,6 +588,27 @@ function home() {
   <section class="sec"><div class="wrap">
     <div class="sec-h"><h2>open tasks</h2><a href="#/tasks" class="muted">all tasks →</a></div>
     ${openT.length ? `<div class="grid g3">${openT.map(taskCard).join('')}</div>` : (loadingNote() || `<div class="empty">no open tasks yet. when a dev posts one, it lands here.</div>`)}
+  </div></section>
+
+  <section class="sec" id="tools"><div class="wrap">
+    <div class="sec-h"><h2>free <span class="o">tools</span></h2><small>they run in your browser, nothing is sent</small></div>
+    <div class="grid g2">
+      <form class="card pad form tool" id="f-check" novalidate>
+        <h3><span class="ic">${ICON.raid}</span>proof checker</h3>
+        <p class="muted" style="margin:0">check a link before you spend a transaction on it.</p>
+        <div class="row2"><label>task type<select name="k">${Object.keys(TYPES).map(k => `<option value="${k}">${k}</option>`).join('')}</select></label><label>your X handle<input class="inp" name="x" placeholder="@you" maxlength="16" autocomplete="off"></label></div>
+        <label>proof link<input class="inp" name="url" placeholder="https://x.com/you/status/…" autocomplete="off"></label>
+        <div class="tool-out" id="check-out">paste a link to check it.</div>
+      </form>
+      <form class="card pad form tool" id="f-plan" novalidate>
+        <h3><span class="ic">${ICON.meme}</span>bounty planner</h3>
+        <p class="muted" style="margin:0">what a round of tasks locks before you post it.</p>
+        <div class="row2"><label>pay per slot (SOL)<input class="inp" name="r" inputmode="decimal" placeholder="0.05"></label><label>slots per task<input class="inp" name="n" inputmode="numeric" placeholder="20"></label></div>
+        <label>how many tasks<input class="inp" name="m" inputmode="numeric" placeholder="1"></label>
+        <div class="tool-out" id="plan-out">enter pay per slot and slots to see what to lock.</div>
+        <a class="btn btn-or" href="#/devs">fund the pool &amp; post →</a>
+      </form>
+    </div>
   </div></section>
 
   <section class="sec"><div class="wrap grid g2">
@@ -823,6 +900,7 @@ function render(soft) {
   lastRoute = key;
   $$('#links a[data-r]').forEach(a => a.classList.toggle('on', a.dataset.r === r.name));
   $('#wallet-label').textContent = wallet.pk ? short(wallet.pk) : 'connect wallet';
+  pill(); updateTools();
   const xl = $('[data-x-link]'); if (CFG.X_URL) { xl.href = CFG.X_URL; xl.hidden = false; }
   strip();
 }
@@ -970,17 +1048,19 @@ document.addEventListener('input', e => {
   const t = e.target;
   if (t.id === 'board-q') { boardQ = t.value; $('#board-grid').innerHTML = boardGrid(); }
   if (t.id === 'task-q') { taskQ = t.value; $('#task-grid').innerHTML = taskGrid(); }
+  if (t.form && (t.form.id === 'f-check' || t.form.id === 'f-plan')) updateTools();
 });
 document.addEventListener('change', e => {
   const t = e.target;
   if (t.id === 'board-sort') { boardSort = t.value; $('#board-grid').innerHTML = boardGrid(); }
   if (t.id === 'task-sort') { taskSort = t.value; $('#task-grid').innerHTML = taskGrid(); }
   if (t.id === 'task-open') { taskOpen = t.checked; $('#task-grid').innerHTML = taskGrid(); }
+  if (t.form && (t.form.id === 'f-check' || t.form.id === 'f-plan')) updateTools();
   if (t.form && t.form.id === 'f-task' && t.name === 'mint') { const n = $('#task-cover'); if (n) n.innerHTML = coverNote(D.coins.get(t.value)); }
 });
 document.addEventListener('keydown', e => { if (e.key === 'Escape' && !$('#modal').hidden) closeModal(); });
 window.addEventListener('hashchange', () => { $('#links').classList.remove('open'); closeModal(); render(); });
-setInterval(() => { $$('[data-since]').forEach(el => { el.textContent = dur(+el.dataset.since); }); }, 1000);
+setInterval(() => { $$('[data-since]').forEach(el => { el.textContent = dur(+el.dataset.since); }); $$('[data-synced]').forEach(el => { el.textContent = syncedTxt(); }); pill(); }, 1000);
 setInterval(() => { if (!document.hidden) sync(); }, CFG.REFRESH_MS);
 document.addEventListener('visibilitychange', () => { if (!document.hidden) sync(); });
 
