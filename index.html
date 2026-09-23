@@ -19,8 +19,24 @@
 <link href="https://fonts.googleapis.com/css2?family=Courier+Prime:wght@700&family=JetBrains+Mono:wght@400;600;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
 </head>
-<body>
+<body class="locked">
 <template id="mark-tpl"><svg class="mark" viewBox="220 180 560 720" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"> <path d="M408 470 C392 432 350 412 342 372 L658 372 C650 412 608 432 592 470 Z" fill="#7af69a" stroke="#050c07" stroke-width="16" stroke-linejoin="round" stroke-linecap="round"/> <path d="M405 470 C270 530 215 650 240 750 C262 835 370 878 500 878 C630 878 738 835 760 750 C785 650 730 530 595 470 Z" fill="#7af69a" stroke="#050c07" stroke-width="16" stroke-linejoin="round" stroke-linecap="round"/> <path d="M700 560 C760 640 760 760 690 830 C730 760 735 650 700 560 Z" fill="#3fbf68"/> <path d="M300 640 C290 690 292 740 318 780" fill="none" stroke="#c9ffd9" stroke-width="22" stroke-linecap="round"/> <rect x="418" y="598" width="164" height="164" rx="26" fill="none" stroke="#3fbf68" stroke-width="8" stroke-dasharray="18 14"/> <path d="M448 682 L488 722 L556 638" fill="none" stroke="#050c07" stroke-width="30" stroke-linecap="round" stroke-linejoin="round"/> <rect x="382" y="438" width="236" height="46" rx="23" fill="#ff8600" stroke="#050c07" stroke-width="16" stroke-linejoin="round" stroke-linecap="round"/> <path d="M420 446 L410 476 M450 446 L440 476 M480 446 L470 476 M510 446 L500 476 M540 446 L530 476 M570 446 L560 476 M600 446 L590 476" stroke="#c95a00" stroke-width="6" stroke-linecap="round"/> <path d="M335 358 C335 252 410 198 500 198 C590 198 665 252 665 358 Z" fill="#ff8600" stroke="#050c07" stroke-width="16" stroke-linejoin="round" stroke-linecap="round"/> <path d="M470 206 C466 260 466 310 470 352 L530 352 C534 310 534 260 530 206 C512 200 488 200 470 206 Z" fill="#ffb04d"/> <path d="M372 330 C372 280 395 250 425 234" fill="none" stroke="#ffd29c" stroke-width="16" stroke-linecap="round"/> <rect x="282" y="344" width="436" height="46" rx="23" fill="#ff8600" stroke="#050c07" stroke-width="16" stroke-linejoin="round" stroke-linecap="round"/> <rect x="300" y="372" width="400" height="10" rx="5" fill="#c95a00"/></svg></template>
+
+<div class="intro" id="intro" role="dialog" aria-label="loading bagwork">
+  <div class="intro-rays"></div>
+  <div class="intro-in">
+    <div class="intro-mark" id="intro-mark"></div>
+    <div class="intro-title">bagwork</div>
+    <p class="intro-sub">devs lock SOL. you do the bagwork.</p>
+    <div class="punch">
+      <div class="punch-head"><span>TIME CARD</span><span id="intro-pct">0%</span></div>
+      <div class="punch-bar"><i id="intro-bar"></i></div>
+      <div class="punch-step" id="intro-step">loading the page…</div>
+    </div>
+    <button class="btn btn-mint intro-go" id="intro-go" data-act="enter" disabled>clock in →</button>
+  </div>
+</div>
+<script>document.getElementById('intro-mark').innerHTML = document.getElementById('mark-tpl').innerHTML; document.getElementById('intro-bar').style.width = '15%'; document.getElementById('intro-pct').textContent = '15%';</script>
 
 <header class="nav" id="nav">
   <div class="nav-in">
@@ -34,7 +50,6 @@
       <a href="#/receipts" data-r="receipts">receipts</a>
       <a class="x-link" data-x-link target="_blank" rel="noopener" hidden>X</a>
     </nav>
-    <span class="live-pill" id="live-pill" title="connection to the Solana chain"><i></i><b>connecting</b></span>
     <button class="btn btn-wallet" data-act="wallet" id="wallet-btn"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M3 7a3 3 0 0 1 3-3h11v3M3 7v10a3 3 0 0 0 3 3h14V9H6a3 3 0 0 1-3-2zm14 7h.01" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg><span id="wallet-label">connect wallet</span></button>
     <button class="menu-btn" data-act="menu" aria-label="menu" aria-expanded="false"><span></span><span></span><span></span></button>
   </div>

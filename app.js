@@ -123,9 +123,24 @@ function saveCache() {
   LS.set(CK, { newest: S.newest, recs });
 }
 
+const intro = { t0: performance.now(), ready: false, done: false };
+function introStep(p, txt) {
+  const b = $('#intro-bar'), s = $('#intro-step'), c = $('#intro-pct');
+  if (b) b.style.width = p + '%'; if (c) c.textContent = p + '%'; if (s && txt) s.textContent = txt;
+}
+function introReady(txt) {
+  if (intro.ready) return; intro.ready = true;
+  setTimeout(() => { introStep(100, txt); const g = $('#intro-go'); if (g) { g.disabled = false; g.focus({ preventScroll: true }); } }, Math.max(0, 1400 - (performance.now() - intro.t0)));
+}
+function enterSite() {
+  if (intro.done) return; intro.done = true;
+  const el = $('#intro'); document.body.classList.remove('locked');
+  if (!el) return; el.classList.add('out'); setTimeout(() => el.remove(), 700);
+}
 async function sync() {
   if (!CFG.ESCROW || S.syncing) return;
   S.syncing = true;
+  if (!intro.ready) introStep(60, 'reading the escrow from the chain…');
   try {
     const b = await rpc('getBalance', [CFG.ESCROW, { commitment: 'confirmed' }]);
     S.bal = b.value;
@@ -154,6 +169,7 @@ async function sync() {
   } finally {
     S.syncing = false;
     derive(); render(true); dexFetch();
+    introReady(S.synced ? 'escrow checked. board loaded.' : 'the chain is slow. the board keeps trying inside.');
   }
 }
 
@@ -509,10 +525,8 @@ function home() {
   <section class="hero"><div class="wrap hero-grid">
     <div>
       ${!CFG.ESCROW ? '<div class="notice">▲ the board opens with the CA. devs can prep a listing now.</div>' : ''}
-      <span class="kicker">proof in → SOL out</span>
       <h1 class="title">bagwork</h1>
       <p class="lede">you've been doing bagwork for free. not anymore.</p>
-      <p class="sub">devs lock SOL in escrow. you raid, meme, thread and clip. approved proof gets paid straight from escrow, and every payout is a tx anyone can open.</p>
       ${escrowCard()}
       <div class="ctas">
         <a class="btn btn-mint" href="#/tasks">browse tasks</a>
@@ -921,6 +935,7 @@ document.addEventListener('click', async e => {
   const act = a.dataset.act;
   if (a.tagName === 'BUTTON' || act === 'scroll') e.preventDefault();
   switch (act) {
+    case 'enter': enterSite(); break;
     case 'menu': { const l = $('#links'); l.classList.toggle('open'); a.setAttribute('aria-expanded', l.classList.contains('open')); break; }
     case 'wallet': openModal(walletModal()); break;
     case 'pick-wallet': connectWith(providers()[+a.dataset.i]); break;
@@ -1058,7 +1073,7 @@ document.addEventListener('change', e => {
   if (t.form && (t.form.id === 'f-check' || t.form.id === 'f-plan')) updateTools();
   if (t.form && t.form.id === 'f-task' && t.name === 'mint') { const n = $('#task-cover'); if (n) n.innerHTML = coverNote(D.coins.get(t.value)); }
 });
-document.addEventListener('keydown', e => { if (e.key === 'Escape' && !$('#modal').hidden) closeModal(); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && !$('#modal').hidden) closeModal(); if (e.key === 'Enter' && intro.ready && !intro.done) enterSite(); });
 window.addEventListener('hashchange', () => { $('#links').classList.remove('open'); closeModal(); render(); });
 setInterval(() => { $$('[data-since]').forEach(el => { el.textContent = dur(+el.dataset.since); }); $$('[data-synced]').forEach(el => { el.textContent = syncedTxt(); }); pill(); }, 1000);
 setInterval(() => { if (!document.hidden) sync(); }, CFG.REFRESH_MS);
@@ -1067,6 +1082,9 @@ document.addEventListener('visibilitychange', () => { if (!document.hidden) sync
 /* ---------- boot ---------- */
 $$('[data-mark]').forEach(el => { el.innerHTML = MARK; });
 render();
+introStep(35, CFG.ESCROW ? 'unlocking the escrow…' : 'setting up the board…');
+if (!CFG.ESCROW) introReady('the board opens with the CA.');
+setTimeout(() => introReady('taking a while. the board keeps loading inside.'), 7000);
 sync();
 (function autoConnect() {
   const n = LS.get('bw:wallet'); if (!n) return;
