@@ -140,7 +140,6 @@ function enterSite() {
 async function sync() {
   if (!CFG.ESCROW || S.syncing) return;
   S.syncing = true;
-  if (!intro.ready) introStep(60, 'reading the escrow from the chain…');
   try {
     const b = await rpc('getBalance', [CFG.ESCROW, { commitment: 'confirmed' }]);
     S.bal = b.value;
@@ -169,7 +168,6 @@ async function sync() {
   } finally {
     S.syncing = false;
     derive(); render(true); dexFetch();
-    introReady(S.synced ? 'escrow checked. board loaded.' : 'the chain is slow. the board keeps trying inside.');
   }
 }
 
@@ -432,8 +430,7 @@ function stats() {
   const workers = new Set(D.pays.map(x => x.to)).size;
   const ready = CFG.ESCROW && S.synced;
   const v = (n, f) => ready ? dash(n, f) : '<span class="dash">—</span>';
-  return `<div class="grid g6">
-    <div class="card stat live"><div class="v">${S.bal && ready ? sol(S.bal) : '<span class="dash" title="nothing yet — a dash is not a zero">—</span>'}</div><div class="l">SOL in escrow</div></div>
+  return `<div class="grid g5">
     <div class="card stat"><div class="v">${v(paid, sol)}</div><div class="l">SOL paid out</div></div>
     <div class="card stat"><div class="v">${v(D.pays.length)}</div><div class="l">payouts</div></div>
     <div class="card stat"><div class="v">${v(workers)}</div><div class="l">workers paid</div></div>
@@ -480,9 +477,7 @@ function pill() {
 }
 function escrowCard() {
   if (!CFG.ESCROW) return '';
-  const bal = S.bal && S.synced ? sol(S.bal) : '<span class="dash" title="nothing yet — a dash is not a zero">—</span>';
-  return `<div class="escard"><div class="escard-top"><span class="dot${S.synced ? ' on' : ''}"></span><b>live escrow</b><span class="muted" data-synced>${esc(syncedTxt())}</span></div>
-    <div class="escard-bal">${bal} <small>SOL locked</small></div>
+  return `<div class="escard"><div class="escard-top"><b>escrow wallet</b><span class="muted">every payout comes from here</span></div>
     <div class="escard-row"><code>${esc(short(CFG.ESCROW))}</code><button class="btn btn-sm" data-act="copy" data-v="${esc(CFG.ESCROW)}">copy</button><a class="btn btn-sm" href="${acct(CFG.ESCROW)}" target="_blank" rel="noopener">solscan ↗</a></div></div>`;
 }
 function actRow(e) {
@@ -1082,9 +1077,6 @@ document.addEventListener('visibilitychange', () => { if (!document.hidden) sync
 /* ---------- boot ---------- */
 $$('[data-mark]').forEach(el => { el.innerHTML = MARK; });
 render();
-introStep(35, CFG.ESCROW ? 'unlocking the escrow…' : 'setting up the board…');
-if (!CFG.ESCROW) introReady('the board opens with the CA.');
-setTimeout(() => introReady('taking a while. the board keeps loading inside.'), 7000);
 sync();
 (function autoConnect() {
   const n = LS.get('bw:wallet'); if (!n) return;
